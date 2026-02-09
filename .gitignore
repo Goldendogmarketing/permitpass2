@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# next.js build
+.next/
+out/
+
+# env files (contain secrets)
+.env
+.env.local
+.env.*.local
+
+# debug
+npm-debug.log*
+
+# misc
+.DS_Store
+*.pem
+Thumbs.db
+NUL
+
+# IDE
+.vscode/
+.idea/
+
+# Claude
+.claude/
