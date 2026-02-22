@@ -615,7 +615,7 @@ function AnnotationBadge({
 function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, loading, signOut } = useAuth();
+  const { isAuthorized, loading, signOut } = useAuth();
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
@@ -663,7 +663,7 @@ function Navbar() {
             {CTA_TEXT}
           </Link>
           {!loading && (
-            user ? (
+            isAuthorized ? (
               <button
                 onClick={() => signOut()}
                 className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 transition-colors"
@@ -720,7 +720,7 @@ function Navbar() {
             {CTA_TEXT}
           </Link>
           {!loading && (
-            user ? (
+            isAuthorized ? (
               <button
                 onClick={() => { signOut(); setMobileMenuOpen(false); }}
                 className="block w-full mt-2 text-center py-2.5 text-slate-600 hover:text-slate-900 transition-colors"

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import ComplianceReport from '@/components/ComplianceReport';
 import type { VisualAnnotation } from '@/components/VisualPlanReview';
-import { useAuth } from '@/contexts/AuthContext';
+
 
 // Dynamic import to avoid SSR issues with pdfjs-dist (requires browser APIs)
 const VisualPlanReview = dynamic(
@@ -23,7 +23,6 @@ type AnalysisState = 'idle' | 'uploading' | 'processing' | 'complete' | 'error';
 type ActiveTab = 'checklist' | 'visual';
 
 export default function AnalyzePage() {
-  const { profile, refreshProfile } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [state, setState] = useState<AnalysisState>('idle');
@@ -100,14 +99,6 @@ export default function AnalyzePage() {
   const handleAnalyze = async () => {
     if (!file) return;
 
-    // Check free tier limit
-    if (profile && profile.analyses_used >= 1 && profile.plan_tier === 'free') {
-      setError(
-        'You have used your free analysis. Upgrade your plan to continue analyzing plans.'
-      );
-      return;
-    }
-
     setState('uploading');
     setProgress(10);
 
@@ -140,8 +131,6 @@ export default function AnalyzePage() {
 
       setReport(result.report);
       setState('complete');
-      // Refresh profile to update analyses_used count
-      await refreshProfile();
     } catch (err) {
       console.error('Analysis error:', err);
       setError('Analysis failed. Please try again.');
@@ -177,11 +166,6 @@ export default function AnalyzePage() {
             className="h-8 w-auto rounded"
           />
           <span className="text-lg font-semibold text-slate-300">— Analyze Plans</span>
-          {profile && profile.plan_tier === 'free' && (
-            <span className="ml-auto text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full">
-              Free Trial: {Math.max(0, 1 - profile.analyses_used)} analysis remaining
-            </span>
-          )}
         </div>
       </header>
 

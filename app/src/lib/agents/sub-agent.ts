@@ -31,10 +31,13 @@ export async function runSubAgent(
 
     const prompt = getSubAgentPrompt(task);
 
+    // floor_plan has 17 checks — needs more output tokens
+    const maxTokens = task.checks.length > 10 ? 12288 : 8192;
+
     const { parsed, usage } = await callClaudeWithPdf({
       pdfBase64: subPdfBase64,
       prompt,
-      maxTokens: 8192,
+      maxTokens,
     });
 
     const categories = normalizeResponse(parsed, task);

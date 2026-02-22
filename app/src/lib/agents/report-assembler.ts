@@ -81,27 +81,48 @@ export function assembleReport(
 }
 
 /**
+ * Normalize category keys — Claude may return variations like
+ * "Site Plan", "site", "flood_resistant", "elevations_structural", etc.
+ */
+const KEY_NORMALIZE: Record<string, string> = {
+  site_plan: 'site_plan', site: 'site_plan', 'site plan': 'site_plan',
+  flood: 'flood', flood_resistant: 'flood', 'flood resistant construction': 'flood',
+  foundation: 'foundation', foundation_plan: 'foundation',
+  floor_plan: 'floor_plan', 'floor plan': 'floor_plan', floor_plan_mep: 'floor_plan',
+  elevations_details: 'elevations_details', elevations: 'elevations_details',
+  elevation_views: 'elevations_details', elevations_structural: 'elevations_details',
+  elevations_protection: 'elevations_details', elevation: 'elevations_details',
+  details: 'elevations_details',
+};
+
+/**
  * Merge categories with the same key (dedup checks from split agents).
+ * Normalizes keys so model variations don't break the merge.
  * Returns in stable order matching COMPLIANCE_CATEGORIES.
  */
 function mergeCategories(categories: CategoryResult[]): CategoryResult[] {
   const merged = new Map<string, CategoryResult>();
 
   for (const cat of categories) {
-    if (merged.has(cat.category)) {
-      const existing = merged.get(cat.category)!;
+    const rawKey = (cat.category || '').toLowerCase().trim();
+    const normalizedKey = KEY_NORMALIZE[rawKey] || rawKey;
+
+    if (merged.has(normalizedKey)) {
+      const existing = merged.get(normalizedKey)!;
       existing.checks.push(...cat.checks);
       existing.overallStatus = deriveStatus(existing.checks);
     } else {
-      merged.set(cat.category, { ...cat, checks: [...cat.checks] });
+      merged.set(normalizedKey, { ...cat, category: normalizedKey, checks: [...cat.checks] });
     }
   }
 
-  // Stable order matching the 5 COMPLIANCE_CATEGORIES sections
+  // Stable order, then any extras
   const order = ['site_plan', 'flood', 'foundation', 'floor_plan', 'elevations_details'];
-  return order
-    .filter((key) => merged.has(key))
-    .map((key) => merged.get(key)!);
+  const orderedKeys = [
+    ...order.filter((key) => merged.has(key)),
+    ...[...merged.keys()].filter((key) => !order.includes(key)),
+  ];
+  return orderedKeys.map((key) => merged.get(key)!);
 }
 
 function deriveStatus(checks: { status: CheckStatus }[]): CheckStatus {

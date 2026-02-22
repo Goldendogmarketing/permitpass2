@@ -1,28 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { runAnalysisPipeline } from '@/lib/agents/orchestrator';
 
 export async function POST(request: NextRequest) {
   try {
-    // ── Auth check ──
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    // ── Auth check (cookie-based beta auth) ──
+    const authorized = request.cookies.get('beta_authorized')?.value === 'true';
+    if (!authorized) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // ── Usage check ──
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('analyses_used, plan_tier')
-      .eq('id', user.id)
-      .single() as { data: { analyses_used: number; plan_tier: string } | null };
-
-    if (profile && profile.analyses_used >= 1 && profile.plan_tier === 'free') {
-      return NextResponse.json(
-        { error: 'Free analysis limit reached. Please upgrade your plan.' },
-        { status: 403 }
-      );
     }
 
     // ── File validation ──
@@ -46,9 +30,6 @@ export async function POST(request: NextRequest) {
 
     // ── Run multi-agent pipeline ──
     const { report } = await runAnalysisPipeline(base64, file.name);
-
-    // ── Increment usage ──
-    await (supabase.rpc as any)('increment_analyses', { user_id: user.id });
 
     return NextResponse.json({ success: true, report });
   } catch (error) {

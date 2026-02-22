@@ -4,8 +4,6 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, CreditCard, Bell } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-
 const PLANS: Record<string, { name: string; price: string; plans: string }> = {
   starter: { name: 'Starter', price: '$99–$199/mo', plans: '5–10 plans/mo' },
   professional: { name: 'Professional', price: '$399–$799/mo', plans: '30–50 plans/mo' },
@@ -17,7 +15,6 @@ function CheckoutContent() {
   const searchParams = useSearchParams();
   const planKey = searchParams.get('plan') || 'starter';
   const plan = PLANS[planKey] || PLANS.starter;
-  const { profile } = useAuth();
 
   return (
     <main className="min-h-screen bg-slate-100">
@@ -76,12 +73,6 @@ function CheckoutContent() {
                 <span className="text-slate-600">Included</span>
                 <span className="font-semibold text-slate-900">{plan.plans}</span>
               </div>
-              {profile?.email && (
-                <div className="flex justify-between">
-                  <span className="text-slate-600">Account</span>
-                  <span className="text-slate-900">{profile.email}</span>
-                </div>
-              )}
             </div>
 
             <button
