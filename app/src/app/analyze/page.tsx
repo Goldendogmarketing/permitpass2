@@ -26,6 +26,7 @@ type ActiveTab = 'checklist' | 'visual';
 export default function AnalyzePage() {
   const [file, setFile] = useState<File | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [state, setState] = useState<AnalysisState>('idle');
   const [progress, setProgress] = useState(0);
   const [report, setReport] = useState<any>(null);
@@ -50,19 +51,16 @@ export default function AnalyzePage() {
 
   // Fetch visual annotations after report is ready
   useEffect(() => {
-    if (!report || !file || annotationsFetched.current) return;
+    if (!report || !blobUrl || annotationsFetched.current) return;
     annotationsFetched.current = true;
 
     const fetchAnnotations = async () => {
       setAnnotationsLoading(true);
       try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('report', JSON.stringify(report));
-
         const response = await fetch('/api/annotate', {
           method: 'POST',
-          body: formData,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ blobUrl, report }),
         });
 
         if (response.ok) {
@@ -79,7 +77,7 @@ export default function AnalyzePage() {
     };
 
     fetchAnnotations();
-  }, [report, file]);
+  }, [report, blobUrl]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -110,6 +108,7 @@ export default function AnalyzePage() {
         access: 'public',
         handleUploadUrl: '/api/upload',
       });
+      setBlobUrl(blob.url);
 
       setProgress(30);
       setState('processing');
@@ -158,6 +157,7 @@ export default function AnalyzePage() {
   const resetAnalysis = () => {
     setFile(null);
     setFileUrl(null);
+    setBlobUrl(null);
     setState('idle');
     setProgress(0);
     setReport(null);

@@ -166,6 +166,8 @@ IMPORTANT:
 - Each annotation MUST reference the correct page number where the element appears`;
 }
 
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest) {
   try {
     // Auth check (cookie-based beta auth)
@@ -174,30 +176,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
-    const reportJson = formData.get('report');
+    const { blobUrl, report } = await request.json();
 
-    if (!file || !reportJson) {
+    if (!blobUrl || !report) {
       return NextResponse.json(
-        { error: 'File and report data required' },
+        { error: 'blobUrl and report data required' },
         { status: 400 }
       );
     }
 
-    // Handle report as string field or file upload
-    let reportText: string;
-    if (typeof reportJson === 'string') {
-      reportText = reportJson;
-    } else if (reportJson instanceof File) {
-      reportText = await reportJson.text();
-    } else {
-      return NextResponse.json({ error: 'Invalid report data' }, { status: 400 });
+    // Download PDF from Vercel Blob
+    const blobResponse = await fetch(blobUrl);
+    if (!blobResponse.ok) {
+      return NextResponse.json(
+        { error: 'Failed to fetch uploaded file' },
+        { status: 400 }
+      );
     }
-    const report = JSON.parse(reportText);
 
-    // Convert PDF to base64
-    const bytes = await file.arrayBuffer();
+    const bytes = await blobResponse.arrayBuffer();
     const base64 = Buffer.from(bytes).toString('base64');
 
     console.log('[Stage 3] Generating visual annotations...');

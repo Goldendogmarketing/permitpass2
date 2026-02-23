@@ -211,7 +211,7 @@ function AnnotationMarker({
 
   return (
     <div
-      className="absolute z-20 cursor-pointer group"
+      className="absolute z-20 cursor-pointer group annotation-marker"
       style={{
         left: `${Math.min(Math.max(annotation.x, 2), 98)}%`,
         top: `${Math.min(Math.max(annotation.y, 2), 98)}%`,
@@ -330,10 +330,73 @@ export function VisualPlanReview({ fileUrl, annotations, loading = false }: Prop
     new Set(['PASS', 'FAIL', 'VERIFY'])
   );
 
+  // Pan (drag-to-scroll) state
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [scrollStart, setScrollStart] = useState({ x: 0, y: 0 });
+
+  // Refs
+  const viewerRef = useRef<HTMLDivElement>(null);
+  const [fitWidth, setFitWidth] = useState<number | null>(null);
+
   // PDF → static image capture (runs in parallel with annotation loading)
   const { pages, numPages, capturingPage, ready, error } = usePdfCapture(fileUrl);
 
   const currentImage = pages.get(currentPage);
+
+  // ─── Compute "fit to width" base ────────────────────────────────────
+  const computeFitWidth = useCallback(() => {
+    if (!viewerRef.current) return;
+    const containerWidth = viewerRef.current.clientWidth - 32; // 16px padding each side
+    setFitWidth(containerWidth);
+  }, []);
+
+  useEffect(() => {
+    computeFitWidth();
+    window.addEventListener('resize', computeFitWidth);
+    return () => window.removeEventListener('resize', computeFitWidth);
+  }, [computeFitWidth, ready]);
+
+  // ─── Ctrl/Cmd + mouse wheel zoom ───────────────────────────────────
+  useEffect(() => {
+    const el = viewerRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      setZoom((prev) => {
+        const next = Math.round((prev + delta) * 100) / 100;
+        return Math.max(0.25, Math.min(4, next));
+      });
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [ready]);
+
+  // ─── Drag-to-pan handlers ──────────────────────────────────────────
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (zoom <= 1) return;
+    if ((e.target as HTMLElement).closest('.annotation-marker')) return;
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setScrollStart({
+      x: viewerRef.current?.scrollLeft ?? 0,
+      y: viewerRef.current?.scrollTop ?? 0,
+    });
+  }, [zoom]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging || !viewerRef.current) return;
+    viewerRef.current.scrollLeft = scrollStart.x - (e.clientX - dragStart.x);
+    viewerRef.current.scrollTop = scrollStart.y - (e.clientY - dragStart.y);
+  }, [isDragging, dragStart, scrollStart]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
 
   // Toggle a status filter
   const toggleStatus = useCallback((status: string) => {
@@ -360,13 +423,6 @@ export function VisualPlanReview({ fileUrl, annotations, loading = false }: Prop
 
   // All findings on current page (for sidebar — always show all)
   const currentPageAllFindings = allFindings.filter((a) => a.page === currentPage);
-
-  // Counts for legend
-  const counts = {
-    pass: currentPageAllFindings.filter((a) => a.type === 'PASS').length,
-    fail: currentPageAllFindings.filter((a) => a.type === 'FAIL').length,
-    verify: currentPageAllFindings.filter((a) => a.type === 'VERIFY').length,
-  };
 
   // Navigate to annotation's page when selected
   const selectAnnotation = (globalIndex: number) => {
@@ -442,21 +498,25 @@ export function VisualPlanReview({ fileUrl, annotations, loading = false }: Prop
     );
   }
 
+  // Compute the displayed image width
+  const imageWidth = fitWidth ? fitWidth * zoom : undefined;
+
   // ─── Ready: full interactive viewer ──────────────────────────────────
   return (
     <div className="bg-white rounded-xl shadow-lg overflow-hidden">
       {/* Header */}
-      <div className="bg-slate-800 text-white px-6 py-4">
+      <div className="bg-slate-800 text-white px-6 py-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h2 className="text-xl font-bold">Visual Plan Review</h2>
-            <p className="text-sm text-slate-400 mt-0.5">
+            <h2 className="text-lg font-bold">Visual Plan Review</h2>
+            <p className="text-xs text-slate-400 mt-0.5">
               {allFindings.length} finding{allFindings.length !== 1 ? 's' : ''} across{' '}
               {numPages} page{numPages !== 1 ? 's' : ''}
+              {zoom > 1 && <span className="ml-2 text-slate-500">Ctrl+scroll to zoom, drag to pan</span>}
             </p>
           </div>
 
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
             {/* Annotation master toggle */}
             <button
               onClick={() => setShowAnnotations(!showAnnotations)}
@@ -504,6 +564,34 @@ export function VisualPlanReview({ fileUrl, annotations, loading = false }: Prop
               </div>
             )}
 
+            {/* Zoom controls */}
+            <div className="flex items-center gap-1 bg-slate-700 rounded-lg p-1">
+              <button
+                onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.25).toFixed(2)))}
+                className="p-1.5 rounded hover:bg-slate-600 transition-colors"
+                title="Zoom out"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              <span className="text-xs min-w-[40px] text-center font-medium text-slate-300">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                onClick={() => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))}
+                className="p-1.5 rounded hover:bg-slate-600 transition-colors"
+                title="Zoom in"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setZoom(1)}
+                className="p-1.5 rounded hover:bg-slate-600 transition-colors"
+                title="Fit to width"
+              >
+                <Maximize2 className="w-4 h-4" />
+              </button>
+            </div>
+
             {/* Page navigation */}
             <div className="flex items-center gap-2">
               <button
@@ -535,51 +623,31 @@ export function VisualPlanReview({ fileUrl, annotations, loading = false }: Prop
       </div>
 
       {/* Body: Plan + Sidebar */}
-      <div className="flex flex-col lg:flex-row">
-        {/* Plan viewer */}
-        <div className="flex-1 relative bg-slate-100 overflow-auto">
-          {/* Zoom controls */}
-          <div className="absolute top-3 right-3 z-30 flex items-center gap-1 bg-white/90 backdrop-blur rounded-lg shadow border border-slate-200 p-1">
-            <button
-              onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}
-              className="p-1.5 rounded hover:bg-slate-100 transition-colors"
-              title="Zoom out"
-            >
-              <ZoomOut className="w-4 h-4 text-slate-600" />
-            </button>
-            <span className="text-xs text-slate-500 min-w-[40px] text-center font-medium">
-              {Math.round(zoom * 100)}%
-            </span>
-            <button
-              onClick={() => setZoom((z) => Math.min(2, +(z + 0.25).toFixed(2)))}
-              className="p-1.5 rounded hover:bg-slate-100 transition-colors"
-              title="Zoom in"
-            >
-              <ZoomIn className="w-4 h-4 text-slate-600" />
-            </button>
-            <button
-              onClick={() => setZoom(1)}
-              className="p-1.5 rounded hover:bg-slate-100 transition-colors"
-              title="Reset zoom"
-            >
-              <Maximize2 className="w-4 h-4 text-slate-600" />
-            </button>
-          </div>
-
-          {/* Captured image + annotation markers */}
-          <div
-            className="p-4 inline-block min-w-full"
-            style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
-          >
+      <div className="flex flex-col lg:flex-row" style={{ height: 'calc(100vh - 180px)', minHeight: '500px' }}>
+        {/* Plan viewer — fills viewport, scroll for zoom */}
+        <div
+          ref={viewerRef}
+          className={`flex-1 relative bg-slate-100 overflow-auto ${
+            isDragging ? 'cursor-grabbing select-none' : zoom > 1 ? 'cursor-grab' : ''
+          }`}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          {/* Image + annotation markers — width-based zoom, no CSS transform */}
+          <div className="p-4">
             <div className="relative inline-block shadow-lg">
               {currentImage ? (
                 <>
-                  {/* Static captured image — cannot fail */}
                   <img
                     src={currentImage.dataUrl}
                     alt={`Plan page ${currentPage}`}
-                    className="block"
-                    style={{ maxWidth: '1200px', width: '100%', height: 'auto' }}
+                    className="block select-none"
+                    style={{
+                      width: imageWidth ? `${imageWidth}px` : '100%',
+                      height: 'auto',
+                    }}
                     draggable={false}
                   />
 
@@ -599,7 +667,6 @@ export function VisualPlanReview({ fileUrl, annotations, loading = false }: Prop
                   ))}
                 </>
               ) : (
-                /* Fallback: page not captured (shouldn't happen if ready=true) */
                 <div className="w-[600px] h-[800px] flex items-center justify-center bg-white rounded">
                   <p className="text-slate-400 text-sm">Page not available</p>
                 </div>
@@ -609,7 +676,7 @@ export function VisualPlanReview({ fileUrl, annotations, loading = false }: Prop
         </div>
 
         {/* Findings sidebar */}
-        <div className="w-full lg:w-96 xl:w-[28rem] border-t lg:border-t-0 lg:border-l border-slate-200 bg-slate-50">
+        <div className="w-full lg:w-96 xl:w-[28rem] border-t lg:border-t-0 lg:border-l border-slate-200 bg-slate-50 flex flex-col">
           <div className="p-4 border-b border-slate-200">
             <h3 className="font-semibold text-slate-800 text-sm">
               Findings — Page {currentPage}
@@ -619,7 +686,7 @@ export function VisualPlanReview({ fileUrl, annotations, loading = false }: Prop
             </p>
           </div>
 
-          <div className="p-3 space-y-2 max-h-[75vh] overflow-y-auto">
+          <div className="p-3 space-y-2 flex-1 overflow-y-auto">
             {currentPageAllFindings.length === 0 && (
               <p className="text-sm text-slate-400 text-center py-8">
                 No findings on this page.
@@ -694,7 +761,7 @@ export function VisualPlanReview({ fileUrl, annotations, loading = false }: Prop
           <div className="flex items-start gap-3 max-w-3xl">
             <StatusIcon status={allFindings[selectedIndex].type} size={20} />
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-semibold text-slate-900">
                   {allFindings[selectedIndex].label}
                 </span>
