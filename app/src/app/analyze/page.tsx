@@ -108,6 +108,7 @@ export default function AnalyzePage() {
       const blob = await upload(file.name, file, {
         access: 'public',
         handleUploadUrl: '/api/upload',
+        addRandomSuffix: true,
       });
 
       setProgress(30);
