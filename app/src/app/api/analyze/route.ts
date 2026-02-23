@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runAnalysisPipeline } from '@/lib/agents/orchestrator';
 
-// Vercel serverless: 5 min timeout, 50MB body
 export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
@@ -12,27 +11,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // ── File validation ──
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
+    // ── Get blob URL and filename from JSON body ──
+    const { blobUrl, fileName } = await request.json();
 
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    if (!blobUrl) {
+      return NextResponse.json({ error: 'No file URL provided' }, { status: 400 });
     }
 
-    if (file.type !== 'application/pdf') {
-      return NextResponse.json(
-        { error: 'Only PDF files are supported' },
-        { status: 400 }
-      );
+    // ── Download PDF from Vercel Blob ──
+    const blobResponse = await fetch(blobUrl);
+    if (!blobResponse.ok) {
+      return NextResponse.json({ error: 'Failed to fetch uploaded file' }, { status: 400 });
     }
 
-    // ── Convert to base64 ──
-    const bytes = await file.arrayBuffer();
+    const bytes = await blobResponse.arrayBuffer();
     const base64 = Buffer.from(bytes).toString('base64');
 
     // ── Run multi-agent pipeline ──
-    const { report } = await runAnalysisPipeline(base64, file.name);
+    const { report } = await runAnalysisPipeline(base64, fileName || 'plan.pdf');
 
     return NextResponse.json({ success: true, report });
   } catch (error) {

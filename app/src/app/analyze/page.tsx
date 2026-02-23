@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Upload, FileCheck, Loader2, ArrowLeft, ClipboardList, Eye } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { upload } from '@vercel/blob/client';
 import ComplianceReport from '@/components/ComplianceReport';
 import type { VisualAnnotation } from '@/components/VisualPlanReview';
 
@@ -103,17 +104,20 @@ export default function AnalyzePage() {
     setProgress(10);
 
     try {
-      // Create form data
-      const formData = new FormData();
-      formData.append('file', file);
+      // Step 1: Upload PDF to Vercel Blob (bypasses 4.5MB serverless limit)
+      const blob = await upload(file.name, file, {
+        access: 'public',
+        handleUploadUrl: '/api/upload',
+      });
 
       setProgress(30);
       setState('processing');
 
-      // Call analysis API
+      // Step 2: Call analyze API with the blob URL
       const response = await fetch('/api/analyze', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
       });
 
       setProgress(70);
