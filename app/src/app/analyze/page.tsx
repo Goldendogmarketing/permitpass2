@@ -105,10 +105,10 @@ export default function AnalyzePage() {
 
     try {
       // Step 1: Upload PDF to Vercel Blob (bypasses 4.5MB serverless limit)
-      const blob = await upload(file.name, file, {
+      const uniqueName = `${Date.now()}-${file.name}`;
+      const blob = await upload(uniqueName, file, {
         access: 'public',
         handleUploadUrl: '/api/upload',
-        addRandomSuffix: true,
       });
 
       setProgress(30);
