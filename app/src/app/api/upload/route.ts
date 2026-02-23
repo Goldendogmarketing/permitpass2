@@ -9,25 +9,19 @@ export async function POST(request: Request): Promise<NextResponse> {
       body,
       request,
       onBeforeGenerateToken: async () => {
-        // Auth check: verify beta cookie
-        const cookie = request.headers.get('cookie') || '';
-        const authorized = cookie.includes('beta_authorized=true');
-        if (!authorized) {
-          throw new Error('Unauthorized');
-        }
-
         return {
           allowedContentTypes: ['application/pdf'],
-          maximumSizeInBytes: 50 * 1024 * 1024, // 50MB
+          maximumSizeInBytes: 50 * 1024 * 1024,
         };
       },
       onUploadCompleted: async () => {
-        // Could track uploads here if needed
+        // no-op
       },
     });
 
     return NextResponse.json(jsonResponse);
   } catch (error) {
+    console.error('[Upload] Error:', error);
     return NextResponse.json(
       { error: (error as Error).message },
       { status: 400 }
