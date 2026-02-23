@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runAnalysisPipeline } from '@/lib/agents/orchestrator';
 
+// Vercel serverless: 5 min timeout, 50MB body
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest) {
   try {
     // ── Auth check (cookie-based beta auth) ──
