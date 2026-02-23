@@ -1,12 +1,11 @@
 'use client';
 
 import { useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Shield, Loader2 } from 'lucide-react';
 
 function LoginContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '/analyze';
 
@@ -35,7 +34,7 @@ function LoginContent() {
         return;
       }
 
-      router.push(redirectTo);
+      window.location.href = redirectTo;
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {
