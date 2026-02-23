@@ -114,17 +114,29 @@ export default function AnalyzePage() {
       setProgress(30);
       setState('processing');
 
-      // Step 2: Call analyze API with the blob URL
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
-      });
+      // Animate progress while waiting for analysis (takes 2-4 min)
+      const progressInterval = setInterval(() => {
+        setProgress((prev) => {
+          if (prev >= 90) return prev;
+          return prev + 1;
+        });
+      }, 3000);
 
-      setProgress(70);
+      // Step 2: Call analyze API with the blob URL
+      let response: Response;
+      try {
+        response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
+        });
+      } finally {
+        clearInterval(progressInterval);
+      }
 
       if (!response.ok) {
-        throw new Error('Analysis failed');
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Analysis failed');
       }
 
       const result = await response.json();
@@ -279,7 +291,7 @@ export default function AnalyzePage() {
               <p className="text-slate-500 mb-6">
                 {state === 'uploading'
                   ? 'Uploading your PDF...'
-                  : 'AI is extracting plan details and checking FBC compliance...'}
+                  : 'Running 5 AI agents across your plans — this typically takes 2-4 minutes...'}
               </p>
 
               {/* Progress Bar */}
